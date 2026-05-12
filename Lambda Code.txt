@@ -1,0 +1,66 @@
+import json
+import boto3
+
+BUCKET_NAME = "photosmckee"
+INDEX_KEY = "index.json"
+
+# File extensions to exclude (lowercase for case-insensitive comparison)
+EXCLUDED_EXTENSIONS = {".html", ".json"}
+
+
+def lambda_handler(event, context):
+    s3 = boto3.client("s3")
+    entries = []
+
+    paginator = s3.get_paginator("list_objects_v2")
+    pages = paginator.paginate(Bucket=BUCKET_NAME)
+
+    seen_prefixes = set()
+
+    for page in pages:
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+
+            # Skip the index.json file itself
+            if key == INDEX_KEY:
+                continue
+
+            # Skip files with excluded extensions (case-insensitive)
+            ext = ""
+            dot_pos = key.rfind(".")
+            slash_pos = key.rfind("/")
+            if dot_pos > slash_pos:  # dot is in the filename, not just a folder name
+                ext = key[dot_pos:].lower()
+            if ext in EXCLUDED_EXTENSIONS:
+                continue
+
+            # Collect all intermediate folder prefixes for this key
+            parts = key.split("/")
+            for i in range(1, len(parts)):
+                prefix = "/".join(parts[:i]) + "/"
+                if prefix not in seen_prefixes:
+                    seen_prefixes.add(prefix)
+                    entries.append(prefix)
+
+            # Add the file itself
+            entries.append(key)
+
+    # Sort entries: folders and files are already in natural S3 order,
+    # but we re-sort to ensure consistent ordering after deduplication.
+    # Folders (ending in /) sort before their children due to "/" < any char.
+    entries_sorted = sorted(set(entries))
+
+    index = {"images": entries_sorted}
+
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=INDEX_KEY,
+        Body=json.dumps(index, indent=4),
+        ContentType="application/json",
+    )
+
+    print(f"index.json updated with {len(entries_sorted)} entries.")
+    return {
+        "statusCode": 200,
+        "body": f"index.json updated with {len(entries_sorted)} entries.",
+    }
