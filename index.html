@@ -307,11 +307,28 @@
     opacity: 0.8;
   }
 
+  /* ── ZOOM ───────────────────────────────────────────── */
+  #viewer-stage.zoomed  { cursor: grab; }
+  #viewer-stage.dragging { cursor: grabbing !important; }
+
+  #zoom-indicator {
+    font-size: 0.72rem;
+    color: var(--sepia);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    display: none;
+    background: rgba(232,223,200,0.85);
+    border: 1px solid var(--aged);
+    border-radius: 2px;
+    padding: 2px 6px;
+  }
+
   /* image viewer */
   #mainImage {
     max-width: 98%;
     max-height: 100%;
     object-fit: contain;
+    will-change: transform;
     opacity: 0;
     transition: opacity 0.35s ease;
     display: none;
@@ -479,6 +496,51 @@
   .thumb-placeholder:hover { opacity: 0.85; }
   .thumb-placeholder.active { opacity: 1; border-color: var(--rust); }
 
+  /* ── DARK MODE TOGGLE BUTTON ────────────────────────── */
+  #dark-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.05rem;
+    padding: 4px 7px;
+    border-radius: 3px;
+    line-height: 1;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  #dark-toggle:hover { background: rgba(255,255,255,0.1); }
+
+  /* ── DARK MODE ───────────────────────────────────────── */
+  body.dark {
+    --aged:     #2e2820;
+    --sepia:    #b8996e;
+    --sepia-lt: #d4b896;
+    --shadow:   rgba(0,0,0,0.55);
+  }
+  body.dark,
+  body.dark #viewer,
+  body.dark #viewer-stage    { background: #1a1714; }
+  body.dark #sidebar         { background: #201c17; }
+  body.dark #breadcrumb      { background: #181410; border-color: #2e2820; }
+  body.dark #viewer-toolbar  { background: #181410; border-color: #2e2820; }
+  body.dark #sidebar-toggle  { background: #2e2820; border-color: #3a3228; }
+  body.dark .tree-folder     { color: #e8dfc8; }
+  body.dark .tree-folder:hover { background: rgba(200,168,128,0.1); }
+  body.dark .tree-file       { color: #c8a880; }
+  body.dark .tree-file:hover { background: rgba(196,98,45,0.1); }
+  body.dark #textContent     { background: #201c17; }
+  body.dark #textContent h2  { color: #e8dfc8; }
+  body.dark .doc-body        { color: #c8b896; }
+  body.dark .doc-meta        { border-color: #3a3228; }
+  body.dark #fullscreen-btn,
+  body.dark #play-btn        { border-color: rgba(240,234,216,0.18); }
+  body.dark #fullscreen-btn:hover,
+  body.dark #play-btn:hover  { background: #3a3228; color: #e8dfc8; }
+  body.dark #zoom-indicator  { background: rgba(24,20,16,0.9); border-color: #3a3228; }
+  body.dark #empty-state h2,
+  body.dark #empty-state p   { color: var(--sepia); }
+  body.dark .search-match    { background: rgba(196,98,45,0.25); }
+
   /* ── SIDEBAR COLLAPSE ───────────────────────────────── */
   #sidebar-toggle {
     width: 14px;
@@ -576,7 +638,7 @@
   }
 </style>
 </head>
-<body>
+<body class="dark">
 
 <!-- HEADER -->
 <div id="header">
@@ -586,6 +648,7 @@
     <input id="search" type="text" placeholder="Search files…" oninput="onSearch(this.value)">
   </div>
   <div id="stats"></div>
+  <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode">☀️</button>
 </div>
 
 <!-- LAYOUT -->
@@ -605,6 +668,7 @@
     <div id="viewer-toolbar">
       <div id="file-title" style="opacity:0.4;font-style:italic">Select a file to view</div>
       <span id="nav-counter"></span>
+      <span id="zoom-indicator"></span>
       <span class="kbd-hint">← → keys · F fullscreen · Space play</span>
       <button id="play-btn" onclick="togglePlay()" title="Auto-advance slideshow (Space)">▶ Play</button>
       <button id="fullscreen-btn" onclick="toggleFullscreen()" title="Fullscreen (F)">⛶ Full</button>
@@ -654,6 +718,9 @@ const folderMap = {};
 let folderCounts = {};
 let slideTimer = null;
 let isPlaying = false;
+let zoomScale = 1, panX = 0, panY = 0;
+let isDragging = false, dragStartX, dragStartY, panStartX, panStartY;
+const MIN_ZOOM = 1, MAX_ZOOM = 6;
 
 function buildFolderCounts(paths) {
   const counts = {};
@@ -854,6 +921,7 @@ function displayFile(path) {
   txt.style.display = 'none';
   uns.style.display = 'none';
   empty.style.display = 'none';
+  resetZoom();
 
   document.getElementById('file-title').textContent = fname(path);
   document.getElementById('file-title').style.opacity = '1';
@@ -963,6 +1031,64 @@ function stopPlay() {
   btn.textContent = '▶ Play';
   btn.classList.remove('playing');
 }
+
+// ─── ZOOM ─────────────────────────────────────────────────────────────────────
+function applyZoom() {
+  const img = document.getElementById('mainImage');
+  img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+  const stage = document.getElementById('viewer-stage');
+  stage.classList.toggle('zoomed', zoomScale > 1);
+  const zi = document.getElementById('zoom-indicator');
+  if (zoomScale > 1) { zi.textContent = `${zoomScale.toFixed(1)}×`; zi.style.display = 'inline'; }
+  else { zi.style.display = 'none'; }
+}
+
+function resetZoom() {
+  zoomScale = 1; panX = 0; panY = 0;
+  applyZoom();
+}
+
+(function initZoom() {
+  const stage = document.getElementById('viewer-stage');
+
+  stage.addEventListener('wheel', e => {
+    if (document.getElementById('mainImage').style.display === 'none') return;
+    e.preventDefault();
+    const rect = stage.getBoundingClientRect();
+    const cx = e.clientX - rect.left - rect.width / 2;
+    const cy = e.clientY - rect.top - rect.height / 2;
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomScale * factor));
+    panX = cx + (panX - cx) * (newScale / zoomScale);
+    panY = cy + (panY - cy) * (newScale / zoomScale);
+    zoomScale = newScale;
+    applyZoom();
+  }, { passive: false });
+
+  stage.addEventListener('mousedown', e => {
+    if (zoomScale <= 1) return;
+    isDragging = true;
+    dragStartX = e.clientX; dragStartY = e.clientY;
+    panStartX = panX;       panStartY = panY;
+    stage.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    panX = panStartX + (e.clientX - dragStartX);
+    panY = panStartY + (e.clientY - dragStartY);
+    applyZoom();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  stage.addEventListener('dblclick', () => { if (zoomScale > 1) resetZoom(); });
+})();
 
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
@@ -1189,6 +1315,18 @@ function startSlideshow(jpegs) {
     yearEl.textContent = yr;
     yearEl.classList.toggle('hidden', !yr);
   }, 4000);
+}
+
+// ─── DARK MODE ────────────────────────────────────────────────────────────────
+function toggleDark() {
+  const dark = document.body.classList.toggle('dark');
+  document.getElementById('dark-toggle').textContent = dark ? '☀️' : '🌙';
+  localStorage.setItem('lightMode', dark ? '' : '1');
+}
+
+if (localStorage.getItem('lightMode')) {
+  document.body.classList.remove('dark');
+  document.getElementById('dark-toggle').textContent = '🌙';
 }
 
 // ─── LAUNCH ───────────────────────────────────────────────────────────────────
