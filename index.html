@@ -636,6 +636,120 @@
     flex-shrink: 0;
     margin-left: 2px;
   }
+
+  /* ── FAVOURITES ──────────────────────────────────────── */
+  #fav-btn {
+    background: transparent;
+    border: 1px solid rgba(26,18,9,0.22);
+    color: var(--sepia);
+    padding: 3px 9px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 2px;
+    font-family: 'Crimson Pro', serif;
+    letter-spacing: 0.04em;
+    transition: background 0.15s, color 0.15s;
+    display: none;
+    white-space: nowrap;
+  }
+  #fav-btn.visible { display: inline-block; }
+  #fav-btn:hover   { background: var(--ink); color: var(--parchment); }
+  #fav-btn.starred { color: #c4a030; border-color: #c4a030; }
+
+  #fav-section {
+    border-bottom: 1px solid var(--aged);
+    flex-shrink: 0;
+    max-height: 160px;
+    overflow-y: auto;
+    display: none;
+  }
+  .fav-header {
+    padding: 5px 12px;
+    font-size: 0.7rem;
+    color: var(--sepia);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    background: #ece6d4;
+    position: sticky;
+    top: 0;
+  }
+  .fav-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 22px;
+    cursor: pointer;
+    font-size: 0.83rem;
+    color: #4a3f2f;
+    transition: background 0.12s;
+  }
+  .fav-item:hover  { background: rgba(155,58,31,0.08); }
+  .fav-item.active { background: var(--rust); color: var(--parchment); }
+  .fav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fav-remove { font-size: 0.65rem; opacity: 0.45; cursor: pointer; flex-shrink: 0; padding: 0 3px; transition: opacity 0.12s; }
+  .fav-remove:hover { opacity: 1; color: var(--rust); }
+
+  body.dark #fav-section       { border-color: #2e2820; }
+  body.dark .fav-header        { background: #181410; }
+  body.dark .fav-item          { color: #c8a880; }
+  body.dark .fav-item:hover    { background: rgba(196,98,45,0.1); }
+  body.dark #fav-btn           { border-color: rgba(240,234,216,0.18); }
+  body.dark #fav-btn:hover     { background: #3a3228; color: #e8dfc8; }
+
+  /* ── SHORTCUT MODAL ──────────────────────────────────── */
+  #shortcut-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0,0,0,0.55);
+    align-items: center;
+    justify-content: center;
+  }
+  #shortcut-modal.open { display: flex; }
+  #shortcut-box {
+    background: #f5f0e8;
+    border-radius: 3px;
+    padding: 28px 36px;
+    max-width: 380px;
+    width: 90%;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.45);
+    border-top: 3px solid var(--rust);
+  }
+  #shortcut-box h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: var(--ink);
+    margin-bottom: 16px;
+    letter-spacing: 0.06em;
+  }
+  .sc-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--aged);
+    font-size: 0.88rem;
+  }
+  .sc-row:last-child { border-bottom: none; }
+  .sc-key {
+    background: var(--aged);
+    border: 1px solid var(--sepia-lt);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    font-family: monospace;
+    color: var(--ink);
+    flex-shrink: 0;
+    margin-left: 12px;
+  }
+  .sc-desc { color: var(--sepia); }
+
+  body.dark #shortcut-box      { background: #201c17; }
+  body.dark #shortcut-box h3   { color: #e8dfc8; }
+  body.dark .sc-key            { background: #2e2820; border-color: #4a3c2e; color: #e8dfc8; }
+  body.dark .sc-row            { border-color: #2e2820; }
 </style>
 </head>
 <body class="dark">
@@ -657,6 +771,10 @@
   <!-- SIDEBAR -->
   <div id="sidebar">
     <div id="breadcrumb">Browse the archive</div>
+    <div id="fav-section">
+      <div class="fav-header">★ Starred</div>
+      <div id="fav-list"></div>
+    </div>
     <div id="sidebar-inner"></div>
   </div>
 
@@ -669,7 +787,8 @@
       <div id="file-title" style="opacity:0.4;font-style:italic">Select a file to view</div>
       <span id="nav-counter"></span>
       <span id="zoom-indicator"></span>
-      <span class="kbd-hint">← → keys · F fullscreen · Space play</span>
+      <span class="kbd-hint">← → · F · Space · ? help</span>
+      <button id="fav-btn" onclick="toggleFav()" title="Star this file">☆ Star</button>
       <button id="play-btn" onclick="togglePlay()" title="Auto-advance slideshow (Space)">▶ Play</button>
       <button id="fullscreen-btn" onclick="toggleFullscreen()" title="Fullscreen (F)">⛶ Full</button>
       <button class="nav-btn" id="btn-prev" onclick="prev()" disabled>← Prev</button>
@@ -707,6 +826,20 @@
   </div>
 </div>
 
+<!-- SHORTCUT MODAL -->
+<div id="shortcut-modal" onclick="closeShortcuts(event)">
+  <div id="shortcut-box">
+    <h3>Keyboard Shortcuts</h3>
+    <div class="sc-row"><span class="sc-desc">Previous file</span><span class="sc-key">←</span></div>
+    <div class="sc-row"><span class="sc-desc">Next file</span><span class="sc-key">→</span></div>
+    <div class="sc-row"><span class="sc-desc">Play / pause slideshow</span><span class="sc-key">Space</span></div>
+    <div class="sc-row"><span class="sc-desc">Fullscreen</span><span class="sc-key">F</span></div>
+    <div class="sc-row"><span class="sc-desc">Reset zoom</span><span class="sc-key">dbl-click</span></div>
+    <div class="sc-row"><span class="sc-desc">Swipe left / right</span><span class="sc-key">touch</span></div>
+    <div class="sc-row"><span class="sc-desc">This cheat sheet</span><span class="sc-key">?</span></div>
+  </div>
+</div>
+
 <script>
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let allFiles = [];
@@ -718,6 +851,8 @@ const folderMap = {};
 let folderCounts = {};
 let slideTimer = null;
 let isPlaying = false;
+let currentFile = '';
+let favourites = JSON.parse(localStorage.getItem('favourites') || '[]');
 let zoomScale = 1, panX = 0, panY = 0;
 let isDragging = false, dragStartX, dragStartY, panStartX, panStartY;
 const MIN_ZOOM = 1, MAX_ZOOM = 6;
@@ -778,6 +913,7 @@ async function init() {
 
   const tree = buildTree(allFiles);
   renderTree(tree, document.getElementById('sidebar-inner'), 0);
+  renderFavSection();
 
   const jpegs = allFiles.filter(p => EXT.image.test(p));
   if (jpegs.length) startSlideshow(jpegs);
@@ -887,12 +1023,16 @@ function renderTree(node, parent, depth, pathPrefix = '') {
 function selectFile(path, el) {
   if (activeFileEl) activeFileEl.classList.remove('active');
   activeFileEl = el;
-  el.classList.add('active');
+  if (el) el.classList.add('active');
+  currentFile = path;
   document.getElementById('btn-prev').disabled = false;
   document.getElementById('btn-next').disabled = false;
   document.getElementById('fullscreen-btn').classList.add('visible');
   document.getElementById('play-btn').classList.add('visible');
+  document.getElementById('fav-btn').classList.add('visible');
   stopPlay();
+  updateFavBtn();
+  renderFavSection();
 
   const dir = path.substring(0, path.lastIndexOf('/') + 1);
   folderFiles = allFiles.filter(p => {
@@ -1008,6 +1148,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft')  prev();
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();
   if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  if (e.key === '?') toggleShortcuts();
+  if (e.key === 'Escape') document.getElementById('shortcut-modal').classList.remove('open');
 });
 
 function togglePlay() {
@@ -1111,7 +1253,10 @@ function syncSidebarToFile(path) {
   if (el) { el.classList.add('active'); activeFileEl = el; }
   document.getElementById('file-title').textContent = fname(path);
   document.getElementById('file-title').style.opacity = '1';
+  currentFile = path;
   updateBreadcrumb(path);
+  updateFavBtn();
+  renderFavSection();
 }
 
 // ─── BREADCRUMB ───────────────────────────────────────────────────────────────
@@ -1316,6 +1461,87 @@ function startSlideshow(jpegs) {
     yearEl.classList.toggle('hidden', !yr);
   }, 4000);
 }
+
+// ─── FAVOURITES ───────────────────────────────────────────────────────────────
+function toggleFav() {
+  const idx = favourites.indexOf(currentFile);
+  if (idx >= 0) favourites.splice(idx, 1);
+  else favourites.unshift(currentFile);
+  localStorage.setItem('favourites', JSON.stringify(favourites));
+  updateFavBtn();
+  renderFavSection();
+}
+
+function updateFavBtn() {
+  const btn = document.getElementById('fav-btn');
+  const starred = favourites.includes(currentFile);
+  btn.textContent = starred ? '★ Starred' : '☆ Star';
+  btn.classList.toggle('starred', starred);
+}
+
+function renderFavSection() {
+  const section = document.getElementById('fav-section');
+  const list = document.getElementById('fav-list');
+  if (!favourites.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = '';
+  favourites.forEach(path => {
+    const div = document.createElement('div');
+    div.className = 'fav-item' + (path === currentFile ? ' active' : '');
+
+    const icon = document.createElement('span');
+    icon.textContent = fileIcon(path);
+
+    const label = document.createElement('span');
+    label.className = 'fav-label';
+    label.textContent = fname(path);
+    label.title = path;
+
+    const rm = document.createElement('span');
+    rm.className = 'fav-remove';
+    rm.textContent = '✕';
+    rm.title = 'Remove';
+    rm.onclick = e => {
+      e.stopPropagation();
+      favourites = favourites.filter(p => p !== path);
+      localStorage.setItem('favourites', JSON.stringify(favourites));
+      updateFavBtn();
+      renderFavSection();
+    };
+
+    div.appendChild(icon);
+    div.appendChild(label);
+    div.appendChild(rm);
+    div.onclick = () => {
+      const dir = path.substring(0, path.lastIndexOf('/'));
+      if (dir) openFolderByPath(dir);
+      const el = document.querySelector(`[data-path="${CSS.escape(path)}"]`);
+      selectFile(path, el || null);
+    };
+    list.appendChild(div);
+  });
+}
+
+// ─── SHORTCUT MODAL ───────────────────────────────────────────────────────────
+function toggleShortcuts() {
+  document.getElementById('shortcut-modal').classList.toggle('open');
+}
+
+function closeShortcuts(e) {
+  if (e.target.id === 'shortcut-modal') document.getElementById('shortcut-modal').classList.remove('open');
+}
+
+// ─── SWIPE GESTURES ───────────────────────────────────────────────────────────
+(function initSwipe() {
+  let tx = 0, ty = 0;
+  const stage = document.getElementById('viewer-stage');
+  stage.addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+  stage.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    const dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { dx < 0 ? next() : prev(); }
+  }, { passive: true });
+})();
 
 // ─── DARK MODE ────────────────────────────────────────────────────────────────
 function toggleDark() {
