@@ -544,6 +544,24 @@
   #fullscreen-btn.visible { display: inline-block; }
   #fullscreen-btn:hover { background: var(--ink); color: var(--parchment); }
 
+  #play-btn {
+    background: transparent;
+    border: 1px solid rgba(26,18,9,0.22);
+    color: var(--sepia);
+    padding: 3px 9px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 2px;
+    font-family: 'Crimson Pro', serif;
+    letter-spacing: 0.04em;
+    transition: background 0.15s, color 0.15s;
+    display: none;
+    white-space: nowrap;
+  }
+  #play-btn.visible { display: inline-block; }
+  #play-btn:hover { background: var(--ink); color: var(--parchment); }
+  #play-btn.playing { background: var(--rust); color: var(--parchment); border-color: var(--rust); }
+
   #viewer:-webkit-full-screen { background: #000; }
   #viewer:fullscreen { background: #000; }
   #viewer:fullscreen #viewer-stage { background: #000; }
@@ -587,7 +605,8 @@
     <div id="viewer-toolbar">
       <div id="file-title" style="opacity:0.4;font-style:italic">Select a file to view</div>
       <span id="nav-counter"></span>
-      <span class="kbd-hint">← → keys · F fullscreen</span>
+      <span class="kbd-hint">← → keys · F fullscreen · Space play</span>
+      <button id="play-btn" onclick="togglePlay()" title="Auto-advance slideshow (Space)">▶ Play</button>
       <button id="fullscreen-btn" onclick="toggleFullscreen()" title="Fullscreen (F)">⛶ Full</button>
       <button class="nav-btn" id="btn-prev" onclick="prev()" disabled>← Prev</button>
       <button class="nav-btn" id="btn-next" onclick="next()" disabled>Next →</button>
@@ -633,6 +652,8 @@ let activeFileEl = null;
 let searchQuery = '';
 const folderMap = {};
 let folderCounts = {};
+let slideTimer = null;
+let isPlaying = false;
 
 function buildFolderCounts(paths) {
   const counts = {};
@@ -803,6 +824,8 @@ function selectFile(path, el) {
   document.getElementById('btn-prev').disabled = false;
   document.getElementById('btn-next').disabled = false;
   document.getElementById('fullscreen-btn').classList.add('visible');
+  document.getElementById('play-btn').classList.add('visible');
+  stopPlay();
 
   const dir = path.substring(0, path.lastIndexOf('/') + 1);
   folderFiles = allFiles.filter(p => {
@@ -912,10 +935,34 @@ function next() {
 }
 
 document.addEventListener('keydown', e => {
+  if (document.activeElement === document.getElementById('search')) return;
   if (e.key === 'ArrowRight') next();
   if (e.key === 'ArrowLeft')  prev();
-  if ((e.key === 'f' || e.key === 'F') && document.activeElement !== document.getElementById('search')) toggleFullscreen();
+  if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
 });
+
+function togglePlay() {
+  if (isPlaying) {
+    stopPlay();
+  } else {
+    if (folderFiles.length < 2) return;
+    isPlaying = true;
+    const btn = document.getElementById('play-btn');
+    btn.textContent = '⏸ Pause';
+    btn.classList.add('playing');
+    slideTimer = setInterval(() => next(), 4000);
+  }
+}
+
+function stopPlay() {
+  isPlaying = false;
+  clearInterval(slideTimer);
+  slideTimer = null;
+  const btn = document.getElementById('play-btn');
+  btn.textContent = '▶ Play';
+  btn.classList.remove('playing');
+}
 
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
