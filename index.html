@@ -252,12 +252,32 @@
   /* empty state */
   #empty-state {
     text-align: center;
-    max-width: 400px;
+    max-width: 480px;
     padding: 40px 20px;
-    opacity: 0.6;
   }
 
-  #empty-state .big-icon { font-size: 4rem; margin-bottom: 16px; display: block; }
+  #slideshow-wrap {
+    position: relative;
+    width: 340px;
+    height: 240px;
+    margin: 0 auto 20px;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 4px 28px var(--shadow), 0 1px 4px rgba(0,0,0,0.12);
+    background: var(--aged);
+  }
+
+  .slide-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 1s ease;
+  }
+
+  .slide-img.slide-active { opacity: 1; }
 
   #empty-state h2 {
     font-family: 'Playfair Display', serif;
@@ -272,6 +292,7 @@
     font-size: 0.95rem;
     color: var(--sepia);
     line-height: 1.6;
+    opacity: 0.8;
   }
 
   /* image viewer */
@@ -532,7 +553,7 @@
       <div id="loading"><div class="spinner"></div></div>
 
       <div id="empty-state">
-        <span class="big-icon">📷</span>
+        <div id="slideshow-wrap"></div>
         <h2>A Family's Story</h2>
         <p>Browse the archive on the left to explore photos, videos, letters, and family histories spanning generations of the Green and McKee families.</p>
       </div>
@@ -610,6 +631,9 @@ async function init() {
 
   const tree = buildTree(allFiles);
   renderTree(tree, document.getElementById('sidebar-inner'), 0);
+
+  const jpegs = allFiles.filter(p => EXT.image.test(p));
+  if (jpegs.length) startSlideshow(jpegs);
 }
 
 // ─── BUILD TREE ───────────────────────────────────────────────────────────────
@@ -1002,6 +1026,30 @@ function onSearch(q) {
 
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── SLIDESHOW ────────────────────────────────────────────────────────────────
+let slideIndex = 0;
+let slideImgs = [];
+
+function startSlideshow(jpegs) {
+  const wrap = document.getElementById('slideshow-wrap');
+  const picks = jpegs.sort(() => Math.random() - 0.5).slice(0, 20);
+
+  picks.forEach((src, i) => {
+    const img = document.createElement('img');
+    img.className = 'slide-img' + (i === 0 ? ' slide-active' : '');
+    img.src = src;
+    img.alt = '';
+    wrap.appendChild(img);
+    slideImgs.push(img);
+  });
+
+  setInterval(() => {
+    slideImgs[slideIndex].classList.remove('slide-active');
+    slideIndex = (slideIndex + 1) % slideImgs.length;
+    slideImgs[slideIndex].classList.add('slide-active');
+  }, 4000);
 }
 
 // ─── LAUNCH ───────────────────────────────────────────────────────────────────
