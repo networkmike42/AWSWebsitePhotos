@@ -279,6 +279,18 @@
 
   .slide-img.slide-active { opacity: 1; }
 
+  #slide-year {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    font-style: italic;
+    color: var(--sepia);
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    min-height: 1.8rem;
+    transition: opacity 0.4s ease;
+  }
+  #slide-year.hidden { opacity: 0; }
+
   #empty-state h2 {
     font-family: 'Playfair Display', serif;
     font-size: 1.6rem;
@@ -1032,23 +1044,41 @@ function escHtml(s) {
 let slideIndex = 0;
 let slideImgs = [];
 
+function slideLabel(path) {
+  const m = path.match(/\b(1[6-9]\d\d|20\d\d)\b/);
+  if (m) return m[1];
+  const parts = path.split('/');
+  return parts.length >= 2 ? parts[parts.length - 2] : '';
+}
+
 function startSlideshow(jpegs) {
   const wrap = document.getElementById('slideshow-wrap');
   const picks = jpegs.sort(() => Math.random() - 0.5).slice(0, 20);
+
+  const yearEl = document.createElement('div');
+  yearEl.id = 'slide-year';
+  wrap.parentNode.insertBefore(yearEl, wrap);
 
   picks.forEach((src, i) => {
     const img = document.createElement('img');
     img.className = 'slide-img' + (i === 0 ? ' slide-active' : '');
     img.src = src;
     img.alt = '';
+    img.dataset.year = slideLabel(src);
     wrap.appendChild(img);
     slideImgs.push(img);
   });
+
+  yearEl.textContent = slideImgs[0].dataset.year;
+  if (!slideImgs[0].dataset.year) yearEl.classList.add('hidden');
 
   setInterval(() => {
     slideImgs[slideIndex].classList.remove('slide-active');
     slideIndex = (slideIndex + 1) % slideImgs.length;
     slideImgs[slideIndex].classList.add('slide-active');
+    const yr = slideImgs[slideIndex].dataset.year;
+    yearEl.textContent = yr;
+    yearEl.classList.toggle('hidden', !yr);
   }, 4000);
 }
 
