@@ -445,6 +445,53 @@
 
   .thumb-placeholder:hover { opacity: 0.85; }
   .thumb-placeholder.active { opacity: 1; border-color: var(--rust); }
+
+  /* ── SIDEBAR COLLAPSE ───────────────────────────────── */
+  #sidebar-toggle {
+    width: 14px;
+    background: var(--aged);
+    border: none;
+    border-left: 1px solid #d4ccb4;
+    border-right: 1px solid #d4ccb4;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.55rem;
+    color: var(--sepia);
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+    padding: 0;
+    writing-mode: vertical-rl;
+    letter-spacing: 0.1em;
+  }
+  #sidebar-toggle:hover { background: var(--sepia-lt); color: var(--parchment); }
+  #sidebar.collapsed { width: 0 !important; min-width: 0 !important; overflow: hidden; }
+
+  /* ── BREADCRUMB INTERACTIVE ──────────────────────────── */
+  #breadcrumb { display: flex; align-items: center; gap: 0; }
+  .bc-seg {
+    cursor: pointer;
+    color: var(--rust);
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    transition: opacity 0.12s;
+  }
+  .bc-seg:hover { text-decoration: underline; opacity: 0.75; }
+  .bc-sep { color: var(--sepia); flex-shrink: 0; padding: 0 3px; }
+  .bc-root { color: var(--sepia); white-space: nowrap; }
+
+  /* ── KEYBOARD HINT ───────────────────────────────────── */
+  .kbd-hint {
+    font-size: 0.7rem;
+    color: var(--sepia-lt);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    opacity: 0.85;
+  }
 </style>
 </head>
 <body>
@@ -468,13 +515,17 @@
     <div id="sidebar-inner"></div>
   </div>
 
+  <!-- SIDEBAR COLLAPSE TOGGLE -->
+  <button id="sidebar-toggle" onclick="toggleSidebar()" title="Collapse/expand sidebar">◀</button>
+
   <!-- VIEWER -->
   <div id="viewer">
     <div id="viewer-toolbar">
       <div id="file-title" style="opacity:0.4;font-style:italic">Select a file to view</div>
       <span id="nav-counter"></span>
-      <button class="nav-btn" onclick="prev()">← Prev</button>
-      <button class="nav-btn" onclick="next()">Next →</button>
+      <span class="kbd-hint">← → keys</span>
+      <button class="nav-btn" id="btn-prev" onclick="prev()" disabled>← Prev</button>
+      <button class="nav-btn" id="btn-next" onclick="next()" disabled>Next →</button>
     </div>
 
     <div id="viewer-stage">
@@ -515,6 +566,7 @@ let folderFiles = [];
 let currentIndex = 0;
 let activeFileEl = null;
 let searchQuery = '';
+const folderMap = {};
 
 // ─── FILE TYPE HELPERS ───────────────────────────────────────────────────────
 const EXT = {
@@ -580,7 +632,7 @@ function buildTree(paths) {
 }
 
 // ─── RENDER TREE ─────────────────────────────────────────────────────────────
-function renderTree(node, parent, depth) {
+function renderTree(node, parent, depth, pathPrefix = '') {
   const indent = depth * 14;
 
   if (node.__files) {
@@ -611,6 +663,7 @@ function renderTree(node, parent, depth) {
   Object.keys(node).forEach(key => {
     if (key === '__files') return;
 
+    const currentPath = pathPrefix ? pathPrefix + '/' + key : key;
     const wrap = document.createElement('div');
 
     const folderRow = document.createElement('div');
@@ -636,13 +689,15 @@ function renderTree(node, parent, depth) {
     const children = document.createElement('div');
     children.className = 'tree-children';
 
-    let rendered = false;
+    folderMap[currentPath] = { folderRow, children, node: node[key], depth, rendered: false };
+
     folderRow.onclick = () => {
       const open = children.classList.toggle('open');
       folderRow.classList.toggle('open', open);
-      if (open && !rendered) {
-        rendered = true;
-        renderTree(node[key], children, depth + 1);
+      const entry = folderMap[currentPath];
+      if (open && !entry.rendered) {
+        entry.rendered = true;
+        renderTree(node[key], children, depth + 1, currentPath);
       }
     };
 
@@ -657,6 +712,8 @@ function selectFile(path, el) {
   if (activeFileEl) activeFileEl.classList.remove('active');
   activeFileEl = el;
   el.classList.add('active');
+  document.getElementById('btn-prev').disabled = false;
+  document.getElementById('btn-next').disabled = false;
 
   const dir = path.substring(0, path.lastIndexOf('/') + 1);
   folderFiles = allFiles.filter(p => {
@@ -789,7 +846,55 @@ function syncSidebarToFile(path) {
 // ─── BREADCRUMB ───────────────────────────────────────────────────────────────
 function updateBreadcrumb(path) {
   const parts = path.split('/').slice(0, -1);
-  document.getElementById('breadcrumb').textContent = parts.join(' › ');
+  const bc = document.getElementById('breadcrumb');
+  bc.innerHTML = '';
+  if (!parts.length) {
+    const span = document.createElement('span');
+    span.className = 'bc-root';
+    span.textContent = 'Browse the archive';
+    bc.appendChild(span);
+    return;
+  }
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      const sep = document.createElement('span');
+      sep.className = 'bc-sep';
+      sep.textContent = '›';
+      bc.appendChild(sep);
+    }
+    const seg = document.createElement('span');
+    seg.className = 'bc-seg';
+    seg.textContent = part;
+    const folderPath = parts.slice(0, i + 1).join('/');
+    seg.title = folderPath;
+    seg.onclick = () => openFolderByPath(folderPath);
+    bc.appendChild(seg);
+  });
+}
+
+function openFolderByPath(folderPath) {
+  const parts = folderPath.split('/');
+  let cumulative = '';
+  for (let i = 0; i < parts.length; i++) {
+    cumulative = i === 0 ? parts[0] : cumulative + '/' + parts[i];
+    const entry = folderMap[cumulative];
+    if (entry && !entry.children.classList.contains('open')) {
+      entry.folderRow.click();
+    }
+  }
+  const target = folderMap[folderPath];
+  if (target) {
+    target.folderRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+// ─── SIDEBAR TOGGLE ───────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+  const collapsed = sidebar.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '▶' : '◀';
+  btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
 }
 
 // ─── THUMBNAILS ──────────────────────────────────────────────────────────────
