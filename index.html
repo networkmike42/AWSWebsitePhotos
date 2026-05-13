@@ -750,12 +750,116 @@
   body.dark #shortcut-box h3   { color: #e8dfc8; }
   body.dark .sc-key            { background: #2e2820; border-color: #4a3c2e; color: #e8dfc8; }
   body.dark .sc-row            { border-color: #2e2820; }
+
+  /* ── MOBILE BASE (hidden on desktop) ────────────────── */
+  #menu-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--parchment);
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: background 0.15s;
+  }
+  #menu-btn:hover { background: rgba(255,255,255,0.1); }
+
+  #sidebar-close {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--sepia);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  #sidebar-close:hover { color: var(--rust); }
+
+  #sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    background: rgba(0,0,0,0.52);
+  }
+  body.mob-open #sidebar-overlay { display: block; }
+
+  /* ── MOBILE LAYOUT (@media) ──────────────────────────── */
+  @media (max-width: 640px) {
+
+    /* Header */
+    #header { padding: 0 10px; gap: 8px; height: 50px; }
+    #header h1 { font-size: 0.95rem; }
+    #header h1 em { display: none; }
+    #stats { display: none; }
+    #search { width: 120px; }
+    #menu-btn { display: inline-block; }
+
+    /* Sidebar — slide-out overlay */
+    #sidebar-toggle { display: none !important; }
+    #sidebar {
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      width: 82vw;
+      max-width: 300px;
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform 0.24s ease;
+      resize: none;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.35);
+    }
+    body.mob-open #sidebar { transform: translateX(0); }
+    #sidebar-close { display: inline-block; }
+
+    /* Tree tap targets */
+    .tree-folder, .tree-file { padding-top: 9px; padding-bottom: 9px; font-size: 0.92rem; }
+
+    /* Viewer */
+    #viewer { padding-bottom: 56px; }
+
+    /* Toolbar becomes fixed bottom bar */
+    #viewer-toolbar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 30;
+      padding: 6px 10px;
+      gap: 6px;
+      border-top: 2px solid var(--rust);
+      border-bottom: none;
+    }
+    #file-title  { display: none; }
+    .kbd-hint    { display: none; }
+    #zoom-indicator  { display: none !important; }
+    #fav-btn         { display: none !important; }
+    #fullscreen-btn  { display: none !important; }
+
+    /* Thumbnail strip — swipe handles navigation on mobile */
+    #thumb-strip { display: none !important; }
+
+    /* Slideshow — full width */
+    #empty-state   { max-width: 100%; padding: 16px 10px; }
+    #slideshow-wrap { width: 100% !important; height: 56vw !important; min-height: 200px; }
+    #slide-year    { font-size: 1.1rem; }
+
+    /* Shortcut modal */
+    #shortcut-box { padding: 20px 22px; }
+  }
+
+  /* Dark mode overlay tint */
+  body.dark #sidebar-overlay { background: rgba(0,0,0,0.65); }
 </style>
 </head>
 <body class="dark">
 
 <!-- HEADER -->
 <div id="header">
+  <button id="menu-btn" onclick="toggleMobileSidebar()" title="Browse archive">☰</button>
   <h1>Family Archive <em>— the Green &amp; McKee Collection</em></h1>
   <div id="search-wrap">
     <span class="search-icon">🔍</span>
@@ -770,7 +874,7 @@
 
   <!-- SIDEBAR -->
   <div id="sidebar">
-    <div id="breadcrumb">Browse the archive</div>
+    <div id="breadcrumb">Browse the archive<button id="sidebar-close" onclick="closeMobileSidebar()" title="Close">✕</button></div>
     <div id="fav-section">
       <div class="fav-header">★ Starred</div>
       <div id="fav-list"></div>
@@ -825,6 +929,9 @@
     <div id="thumb-strip" class="hidden"></div>
   </div>
 </div>
+
+<!-- MOBILE SIDEBAR OVERLAY -->
+<div id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
 
 <!-- SHORTCUT MODAL -->
 <div id="shortcut-modal" onclick="closeShortcuts(event)">
@@ -1033,6 +1140,7 @@ function selectFile(path, el) {
   stopPlay();
   updateFavBtn();
   renderFavSection();
+  closeMobileSidebar();
 
   const dir = path.substring(0, path.lastIndexOf('/') + 1);
   folderFiles = allFiles.filter(p => {
@@ -1542,6 +1650,10 @@ function closeShortcuts(e) {
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { dx < 0 ? next() : prev(); }
   }, { passive: true });
 })();
+
+// ─── MOBILE SIDEBAR ───────────────────────────────────────────────────────────
+function toggleMobileSidebar() { document.body.classList.toggle('mob-open'); }
+function closeMobileSidebar()  { document.body.classList.remove('mob-open'); }
 
 // ─── DARK MODE ────────────────────────────────────────────────────────────────
 function toggleDark() {
