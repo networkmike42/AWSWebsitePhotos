@@ -525,6 +525,37 @@
     white-space: nowrap;
     opacity: 0.85;
   }
+
+  /* ── FULLSCREEN ──────────────────────────────────────── */
+  #fullscreen-btn {
+    background: transparent;
+    border: 1px solid rgba(26,18,9,0.22);
+    color: var(--sepia);
+    padding: 3px 9px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 2px;
+    font-family: 'Crimson Pro', serif;
+    letter-spacing: 0.04em;
+    transition: background 0.15s, color 0.15s;
+    display: none;
+    white-space: nowrap;
+  }
+  #fullscreen-btn.visible { display: inline-block; }
+  #fullscreen-btn:hover { background: var(--ink); color: var(--parchment); }
+
+  #viewer:-webkit-full-screen { background: #000; }
+  #viewer:fullscreen { background: #000; }
+  #viewer:fullscreen #viewer-stage { background: #000; }
+  #viewer:fullscreen #viewer-toolbar { background: rgba(26,18,9,0.85); border-color: transparent; }
+
+  /* ── FOLDER COUNT BADGE ──────────────────────────────── */
+  .folder-count {
+    font-size: 0.68rem;
+    color: var(--sepia-lt);
+    flex-shrink: 0;
+    margin-left: 2px;
+  }
 </style>
 </head>
 <body>
@@ -556,7 +587,8 @@
     <div id="viewer-toolbar">
       <div id="file-title" style="opacity:0.4;font-style:italic">Select a file to view</div>
       <span id="nav-counter"></span>
-      <span class="kbd-hint">← → keys</span>
+      <span class="kbd-hint">← → keys · F fullscreen</span>
+      <button id="fullscreen-btn" onclick="toggleFullscreen()" title="Fullscreen (F)">⛶ Full</button>
       <button class="nav-btn" id="btn-prev" onclick="prev()" disabled>← Prev</button>
       <button class="nav-btn" id="btn-next" onclick="next()" disabled>Next →</button>
     </div>
@@ -600,6 +632,20 @@ let currentIndex = 0;
 let activeFileEl = null;
 let searchQuery = '';
 const folderMap = {};
+let folderCounts = {};
+
+function buildFolderCounts(paths) {
+  const counts = {};
+  paths.forEach(path => {
+    const parts = path.split('/');
+    let cumulative = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      cumulative = i === 0 ? parts[0] : cumulative + '/' + parts[i];
+      counts[cumulative] = (counts[cumulative] || 0) + 1;
+    }
+  });
+  return counts;
+}
 
 // ─── FILE TYPE HELPERS ───────────────────────────────────────────────────────
 const EXT = {
@@ -637,6 +683,7 @@ async function init() {
   const res  = await fetch('index.json');
   const data = await res.json();
   allFiles   = (data.images || []).filter(p => !p.endsWith('/'));
+  folderCounts = buildFolderCounts(allFiles);
 
   document.getElementById('stats').textContent =
     allFiles.length.toLocaleString() + ' items';
@@ -718,9 +765,14 @@ function renderTree(node, parent, depth, pathPrefix = '') {
     label.className = 'tree-label';
     label.textContent = key;
 
+    const count = document.createElement('span');
+    count.className = 'folder-count';
+    count.textContent = folderCounts[currentPath] ? `(${folderCounts[currentPath].toLocaleString()})` : '';
+
     folderRow.appendChild(toggle);
     folderRow.appendChild(ficon);
     folderRow.appendChild(label);
+    folderRow.appendChild(count);
 
     const children = document.createElement('div');
     children.className = 'tree-children';
@@ -750,6 +802,7 @@ function selectFile(path, el) {
   el.classList.add('active');
   document.getElementById('btn-prev').disabled = false;
   document.getElementById('btn-next').disabled = false;
+  document.getElementById('fullscreen-btn').classList.add('visible');
 
   const dir = path.substring(0, path.lastIndexOf('/') + 1);
   folderFiles = allFiles.filter(p => {
@@ -861,7 +914,16 @@ function next() {
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') next();
   if (e.key === 'ArrowLeft')  prev();
+  if ((e.key === 'f' || e.key === 'F') && document.activeElement !== document.getElementById('search')) toggleFullscreen();
 });
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.getElementById('viewer').requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+}
 
 function updateCounter() {
   const el = document.getElementById('nav-counter');
